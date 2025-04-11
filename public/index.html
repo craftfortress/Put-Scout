@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.deribit.com https://api.coingecko.com; img-src 'self' data:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.deribit.com https://api.coingecko.com https://api.theblock.co; img-src 'self' data:;">
     <title>Ethereum Options Analysis</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
@@ -103,17 +103,18 @@
             <table>
                 <thead>
                     <tr>
+                        <th>Type</th>
                         <th>Strike Price</th>
                         <th>Expiry Date</th>
                         <th>Implied Volatility</th>
                         <th>Option Premium</th>
-                        <th>Price Drop for Profit</th>
-                        <th>Price Drop for 3000% ROI</th>
+                        <th>Price Movement for Profit</th>
+                        <th>Price Movement for 3000% ROI</th>
                         <th>Recommended Hold</th>
                         <th>Good Trade</th>
                     </tr>
                 </thead>
-                <tbody id="optionsData"></tbody>
+                <tbody id="optionsTableBody"></tbody>
             </table>
             <button id="expandButton" class="expand-button">Show More Options</button>
         </div>
@@ -269,18 +270,23 @@
             const iv = option.mark_iv * 100; // Convert to percentage
             
             // Calculate required price movement for 3000% ROI
-            const priceForTargetROI = strike - (premium * 31);
-            const priceDecreaseForTargetROI = ((currentPrice - priceForTargetROI) / currentPrice) * 100;
+            const priceForTargetROI = option.option_type === 'p' ? 
+                strike - (premium * 31) : // For puts
+                strike + (premium * 31);  // For calls
+            
+            const priceMovementForTargetROI = option.option_type === 'p' ?
+                ((currentPrice - priceForTargetROI) / currentPrice) * 100 : // For puts
+                ((priceForTargetROI - currentPrice) / currentPrice) * 100;  // For calls
             
             // Criteria for a good trade:
-            // 1. Strike price below current price (for put options)
+            // 1. Strike price below current price (for puts) or above (for calls)
             // 2. Reasonable IV (between 30% and 150%)
-            // 3. Price decrease needed is achievable (not more than 30%)
+            // 3. Price movement needed is achievable (not more than 30%)
             // 4. Enough time to expiry (at least 7 days)
             // 5. Premium is reasonable (not too low or too high)
-            return strike < currentPrice && 
+            return (option.option_type === 'p' ? strike < currentPrice : strike > currentPrice) && 
                    iv >= 30 && iv <= 150 && // Realistic IV range
-                   priceDecreaseForTargetROI < 30 && 
+                   priceMovementForTargetROI < 30 && 
                    daysToExpiry >= 7 &&
                    premium >= 0.01 && premium <= 100; // Reasonable premium range
         }
@@ -298,87 +304,42 @@
         }
 
         function updateOptionsTable(optionsData) {
-            const tbody = document.getElementById('optionsData');
+            const tbody = document.getElementById('optionsTableBody');
             tbody.innerHTML = '';
-            allOptionsData = [];
-
+            
             if (!optionsData || !optionsData.result || !Array.isArray(optionsData.result)) {
                 console.error('Invalid options data received:', optionsData);
                 return;
             }
 
-            // Filter out unrealistic data
-            const validOptions = optionsData.result.filter(opt => {
-                const iv = opt.mark_iv * 100; // Convert to percentage
-                return opt.mark_price > 0 && 
-                       opt.mark_price < 100 && // Reasonable premium
-                       iv >= 30 && iv <= 150 && // Realistic IV range
-                       opt.strike > 0;
-            });
-
-            // Add current price header
-            const currentPrice = validOptions[0]?.underlying_price;
-            if (currentPrice) {
-                const priceHeader = document.createElement('div');
-                priceHeader.innerHTML = `<h3>Current ETH Price: $${currentPrice.toLocaleString()}</h3>`;
-                tbody.parentElement.parentElement.insertBefore(priceHeader, tbody.parentElement);
-            }
-
-            // Update table headers
-            const thead = tbody.parentElement.querySelector('thead tr');
-            thead.innerHTML = `
-                <th>Strike Price</th>
-                <th>Expiry Date</th>
-                <th>Implied Volatility</th>
-                <th>Option Premium</th>
-                <th>Price Drop for Profit</th>
-                <th>Price Drop for 3000% ROI</th>
-                <th>Recommended Hold</th>
-                <th>Good Trade</th>
-            `;
-
-            // Process valid options
-            validOptions.forEach((option, index) => {
-                const roiData = calculateROI(option);
-                if (roiData === 'N/A') return;
-                
-                const daysToExpiry = Math.ceil((option.expiration_timestamp - Date.now()) / (1000 * 60 * 60 * 24));
-                const isGood = isGoodTrade(option);
-                const holdingPeriod = getRecommendedHoldingPeriod(option);
-                
+            console.log('Total options received:', optionsData.result.length);
+            
+            // Process all options without filtering
+            optionsData.result.forEach(option => {
                 const row = document.createElement('tr');
+                
+                // Calculate ROI and price movements
+                const roi = calculateROI(option);
+                const isGood = isGoodTrade(option);
+                
+                // Add grey background for bad trades
+                if (!isGood) {
+                    row.style.backgroundColor = '#f5f5f5';
+                }
+                
                 row.innerHTML = `
-                    <td>$${option.strike ? option.strike.toLocaleString() : 'N/A'}</td>
-                    <td>${option.expiration_timestamp ? new Date(option.expiration_timestamp).toLocaleDateString() + ` (${daysToExpiry} days)` : 'N/A'}</td>
-                    <td>${(option.mark_iv * 100).toFixed(2)}%</td>
-                    <td>$${option.mark_price.toFixed(4)}</td>
-                    <td>${roiData.priceDecreaseForProfit}</td>
-                    <td>${roiData.priceDecreaseForTargetROI}</td>
-                    <td>${holdingPeriod}</td>
-                    <td>${isGood ? '✓' : '✗'}</td>
+                    <td>${option.option_type.toUpperCase()}</td>
+                    <td>$${option.strike.toLocaleString()}</td>
+                    <td>${new Date(option.expiration_timestamp).toLocaleDateString()}</td>
+                    <td>${(option.mark_iv * 100).toFixed(1)}%</td>
+                    <td>$${option.mark_price.toFixed(2)}</td>
+                    <td>${roi.priceMovementForProfit}</td>
+                    <td>${roi.priceMovementForTargetROI}</td>
+                    <td>${getRecommendedHoldingPeriod(option)}</td>
+                    <td>${isGood ? '✅' : '❌'}</td>
                 `;
-                
-                if (isGood) {
-                    row.style.backgroundColor = 'rgba(0, 255, 0, 0.1)';
-                }
-                
-                allOptionsData.push(row);
+                tbody.appendChild(row);
             });
-
-            // Show only first 10 rows initially
-            allOptionsData.forEach((row, index) => {
-                if (index < 10) {
-                    tbody.appendChild(row);
-                } else {
-                    row.classList.add('hidden-rows');
-                    tbody.appendChild(row);
-                }
-            });
-
-            // Update expand button text
-            const expandButton = document.getElementById('expandButton');
-            expandButton.textContent = allOptionsData.length > 10 ? 'Show More Options' : 'All Options Shown';
-            expandButton.style.display = allOptionsData.length > 10 ? 'block' : 'none';
         }
 
         function calculateROI(option) {
@@ -387,7 +348,6 @@
                 return 'N/A';
             }
             try {
-                // For put options:
                 // Premium is in USD per ETH
                 // Strike price is in USD
                 // Contract size is 1 ETH
@@ -397,15 +357,29 @@
                 const contractSize = 1;             // 1 ETH
                 
                 // Calculate required price movements
-                const priceForProfit = strike - premium;  // Price at which option breaks even
-                const priceForTargetROI = strike - (premium * 31);  // Price needed for 3000% ROI
+                const priceForProfit = option.option_type === 'p' ?
+                    strike - premium :  // For puts: Price at which option breaks even
+                    strike + premium;   // For calls: Price at which option breaks even
                 
-                const priceDecreaseForProfit = ((currentPrice - priceForProfit) / currentPrice) * 100;
-                const priceDecreaseForTargetROI = ((currentPrice - priceForTargetROI) / currentPrice) * 100;
+                const priceForTargetROI = option.option_type === 'p' ?
+                    strike - (premium * 31) :  // For puts: Price needed for 3000% ROI
+                    strike + (premium * 31);   // For calls: Price needed for 3000% ROI
                 
-                // Maximum profit = (Strike - Premium) * Contract Size
+                const priceMovementForProfit = option.option_type === 'p' ?
+                    ((currentPrice - priceForProfit) / currentPrice) * 100 :  // For puts
+                    ((priceForProfit - currentPrice) / currentPrice) * 100;   // For calls
+                
+                const priceMovementForTargetROI = option.option_type === 'p' ?
+                    ((currentPrice - priceForTargetROI) / currentPrice) * 100 :  // For puts
+                    ((priceForTargetROI - currentPrice) / currentPrice) * 100;   // For calls
+                
+                // Maximum profit = (Strike - Premium) * Contract Size for puts
+                // Maximum profit = (Strike + Premium) * Contract Size for calls
+                const maxProfit = option.option_type === 'p' ?
+                    (strike - premium) * contractSize :
+                    (strike + premium) * contractSize;
+                
                 // Maximum loss = Premium * Contract Size
-                const maxProfit = (strike - premium) * contractSize;
                 const maxLoss = premium * contractSize;
                 
                 // ROI = (Maximum Profit / Maximum Loss) * 100
@@ -413,8 +387,8 @@
                 
                 return {
                     roi: roi.toFixed(2) + '%',
-                    priceDecreaseForProfit: priceDecreaseForProfit.toFixed(2) + '%',
-                    priceDecreaseForTargetROI: priceDecreaseForTargetROI.toFixed(2) + '%'
+                    priceMovementForProfit: priceMovementForProfit.toFixed(2) + '%',
+                    priceMovementForTargetROI: priceMovementForTargetROI.toFixed(2) + '%'
                 };
             } catch (error) {
                 console.error('Error calculating ROI:', error, 'for option:', option);
@@ -438,11 +412,14 @@
                     return opt.mark_iv > 0 && // Must have valid IV
                            opt.mark_price > 0; // Must have valid price
                 })
-                .map(opt => ({
-                    ...opt,
-                    roi: parseFloat(calculateROI(opt).replace('%', '')) || 0,
-                    daysToExpiry: Math.ceil((opt.expiration_timestamp - Date.now()) / (1000 * 60 * 60 * 24))
-                }))
+                .map(opt => {
+                    const roiData = calculateROI(opt);
+                    return {
+                        ...opt,
+                        roi: roiData === 'N/A' ? 0 : parseFloat(roiData.roi.replace('%', '')),
+                        daysToExpiry: Math.ceil((opt.expiration_timestamp - Date.now()) / (1000 * 60 * 60 * 24))
+                    };
+                })
                 .sort((a, b) => b.roi - a.roi);
             
             // Find options that meet the 3000% ROI target and 4-week timeframe
