@@ -85,6 +85,19 @@ app.get('/api/options-data', async (req, res) => {
     }
 });
 
+// The Block API endpoint for ETH ATM IV
+const THEBLOCK_API = 'https://api.theblock.co/api/v1';
+
+app.get('/api/eth-iv', async (req, res) => {
+    try {
+        const response = await axios.get(`${THEBLOCK_API}/eth/atm-iv`);
+        res.json(response.data);
+    } catch (error) {
+        console.error('Error fetching ETH IV data:', error.message);
+        res.status(500).json({ error: 'Error fetching IV data' });
+    }
+});
+
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 }); 

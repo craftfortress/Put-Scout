@@ -88,6 +88,11 @@
             <canvas id="ethPriceChart"></canvas>
         </div>
 
+        <div class="iv-container">
+            <h2>Implied Volatility</h2>
+            <div id="ivData">Loading IV data...</div>
+        </div>
+
         <div class="recommendation-section">
             <h2>Recommendation</h2>
             <p id="recommendation">Analyzing data...</p>
@@ -141,28 +146,26 @@
         async function fetchData() {
             try {
                 console.log('Fetching data...');
-                const [priceResponse, optionsResponse] = await Promise.all([
+                const [priceResponse, optionsResponse, ivResponse] = await Promise.all([
                     fetch('/api/eth-price'),
-                    fetch('/api/options-data')
+                    fetch('/api/options-data'),
+                    fetch('/api/eth-iv')
                 ]);
 
-                if (!priceResponse.ok || !optionsResponse.ok) {
-                    throw new Error(`HTTP error! price: ${priceResponse.status}, options: ${optionsResponse.status}`);
+                if (!priceResponse.ok || !optionsResponse.ok || !ivResponse.ok) {
+                    throw new Error(`HTTP error! price: ${priceResponse.status}, options: ${optionsResponse.status}, iv: ${ivResponse.status}`);
                 }
 
                 const priceData = await priceResponse.json();
                 const optionsData = await optionsResponse.json();
+                const ivData = await ivResponse.json();
 
                 console.log('Price API Response:', priceData);
                 console.log('Options API Response:', optionsData);
+                console.log('IV API Response:', ivData);
                 
-                if (!optionsData || !optionsData.result) {
-                    console.error('Options data is missing or has unexpected structure:', optionsData);
-                    document.getElementById('recommendation').textContent = 'Error: Invalid options data received';
-                    return;
-                }
-
                 updatePriceChart(priceData);
+                updateIVDisplay(ivData);
                 updateOptionsTable(optionsData);
                 analyzeData(priceData, optionsData);
             } catch (error) {
@@ -236,6 +239,24 @@
                     }
                 }
             });
+        }
+
+        function updateIVDisplay(ivData) {
+            const ivContainer = document.getElementById('ivData');
+            if (!ivData || !ivData.value) {
+                ivContainer.innerHTML = 'No IV data available';
+                return;
+            }
+
+            const iv = ivData.value;
+            const ivClass = iv > 100 ? 'high-iv' : iv > 50 ? 'medium-iv' : 'low-iv';
+            
+            ivContainer.innerHTML = `
+                <div class="iv-value ${ivClass}">
+                    <h3>Current ATM IV: ${iv.toFixed(2)}%</h3>
+                    <p>Last updated: ${new Date(ivData.timestamp).toLocaleString()}</p>
+                </div>
+            `;
         }
 
         function isGoodTrade(option) {
