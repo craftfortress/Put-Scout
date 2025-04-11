@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.deribit.com; img-src 'self' data:;">
+    <title>Ethereum Options Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #333333;
+            --border-color: #dddddd;
+            --header-bg: #f5f5f5;
+            --button-bg: #6c757d;
+            --button-hover: #5a6268;
+            --chart-color: #6c757d;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #1a1a1a;
+            --text-color: #e0e0e0;
+            --border-color: #444444;
+            --header-bg: #2d2d2d;
+            --button-bg: #495057;
+            --button-hover: #343a40;
+            --chart-color: #adb5bd;
+        }
+
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 20px 0; 
+            background-color: var(--bg-color);
+        }
+        th, td { 
+            padding: 10px; 
+            text-align: left; 
+            border: 1px solid var(--border-color); 
+        }
+        th { background-color: var(--header-bg); }
+        .chart-container { margin: 20px 0; height: 400px; }
+        .recommendation-section { margin-bottom: 30px; }
+        .options-table-container { margin-top: 30px; }
+        .expand-button { 
+            display: block; 
+            margin: 10px auto; 
+            padding: 8px 16px; 
+            background-color: var(--button-bg); 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            transition: background-color 0.3s;
+        }
+        .expand-button:hover { background-color: var(--button-hover); }
+        .hidden-rows { display: none; }
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            background-color: var(--button-bg);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .theme-toggle:hover { background-color: var(--button-hover); }
+    </style>
+</head>
+<body>
+    <button id="themeToggle" class="theme-toggle">Toggle Dark Mode</button>
+    <div class="container">
+        <h1>Ethereum Price and Options Analysis</h1>
+
+        <div class="chart-container">
+            <canvas id="ethPriceChart"></canvas>
+        </div>
+
+        <div class="recommendation-section">
+            <h2>Recommendation</h2>
+            <p id="recommendation">Analyzing data...</p>
+        </div>
+
+        <div class="options-table-container">
+            <h2>Options Data</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Strike Price</th>
+                        <th>Expiry Date</th>
+                        <th>Implied Volatility</th>
+                        <th>Option Premium</th>
+                        <th>Price Drop for Profit</th>
+                        <th>Price Drop for 3000% ROI</th>
+                        <th>Recommended Hold</th>
+                        <th>Good Trade</th>
+                    </tr>
+                </thead>
+                <tbody id="optionsData"></tbody>
+            </table>
+            <button id="expandButton" class="expand-button">Show More Options</button>
+        </div>
+    </div>
+
+    <script>
+        let priceChart;
+        let allOptionsData = [];
+        let isExpanded = false;
+        let isDarkMode = false;
+
+        // Theme toggle functionality
+        document.getElementById('themeToggle').addEventListener('click', function() {
+            isDarkMode = !isDarkMode;
+            document.body.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+            this.textContent = isDarkMode ? 'Toggle Light Mode' : 'Toggle Dark Mode';
+            updateChartTheme();
+        });
+
+        function updateChartTheme() {
+            if (priceChart) {
+                priceChart.options.scales.x.grid.color = isDarkMode ? '#444444' : '#dddddd';
+                priceChart.options.scales.y.grid.color = isDarkMode ? '#444444' : '#dddddd';
+                priceChart.options.scales.x.ticks.color = isDarkMode ? '#e0e0e0' : '#333333';
+                priceChart.options.scales.y.ticks.color = isDarkMode ? '#e0e0e0' : '#333333';
+                priceChart.update();
+            }
+        }
+
+        async function fetchData() {
+            try {
+                console.log('Fetching data...');
+                const [priceResponse, optionsResponse] = await Promise.all([
+                    fetch('/api/eth-price'),
+                    fetch('/api/options-data')
+                ]);
+
+                if (!priceResponse.ok || !optionsResponse.ok) {
+                    throw new Error(`HTTP error! price: ${priceResponse.status}, options: ${optionsResponse.status}`);
+                }
+
+                const priceData = await priceResponse.json();
+                const optionsData = await optionsResponse.json();
+
+                console.log('Price API Response:', priceData);
+                console.log('Options API Response:', optionsData);
+                
+                if (!optionsData || !optionsData.result) {
+                    console.error('Options data is missing or has unexpected structure:', optionsData);
+                    document.getElementById('recommendation').textContent = 'Error: Invalid options data received';
+                    return;
+                }
+
+                updatePriceChart(priceData);
+                updateOptionsTable(optionsData);
+                analyzeData(priceData, optionsData);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                document.getElementById('recommendation').textContent = 'Error: Failed to fetch data. Please try again later.';
+            }
+        }
+
+        function updatePriceChart(priceData) {
+            const ctx = document.getElementById('ethPriceChart').getContext('2d');
+            const prices = priceData.prices.map(p => ({ x: new Date(p[0]), y: p[1] }));
+
+            if (priceChart) {
+                priceChart.destroy();
+            }
+
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'ETH Price (USD)',
+                        data: prices,
+                        borderColor: getComputedStyle(document.body).getPropertyValue('--chart-color'),
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day',
+                                displayFormats: {
+                                    day: 'MMM d'
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Date',
+                                color: getComputedStyle(document.body).getPropertyValue('--text-color')
+                            },
+                            grid: {
+                                color: getComputedStyle(document.body).getPropertyValue('--border-color')
+                            },
+                            ticks: {
+                                color: getComputedStyle(document.body).getPropertyValue('--text-color')
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Price (USD)',
+                                color: getComputedStyle(document.body).getPropertyValue('--text-color')
+                            },
+                            grid: {
+                                color: getComputedStyle(document.body).getPropertyValue('--border-color')
+                            },
+                            ticks: {
+                                color: getComputedStyle(document.body).getPropertyValue('--text-color')
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: getComputedStyle(document.body).getPropertyValue('--text-color')
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function isGoodTrade(option) {
+            if (!option || !option.mark_price || !option.strike || !option.underlying_price) return false;
+            
+            const premium = option.mark_price;
+            const strike = option.strike;
+            const currentPrice = option.underlying_price;
+            const daysToExpiry = Math.ceil((option.expiration_timestamp - Date.now()) / (1000 * 60 * 60 * 24));
+            const iv = option.mark_iv * 100; // Convert to percentage
+            
+            // Calculate required price movement for 3000% ROI
+            const priceForTargetROI = strike - (premium * 31);
+            const priceDecreaseForTargetROI = ((currentPrice - priceForTargetROI) / currentPrice) * 100;
+            
+            // Criteria for a good trade:
+            // 1. Strike price below current price (for put options)
+            // 2. Reasonable IV (between 30% and 150%)
+            // 3. Price decrease needed is achievable (not more than 30%)
+            // 4. Enough time to expiry (at least 7 days)
+            // 5. Premium is reasonable (not too low or too high)
+            return strike < currentPrice && 
+                   iv >= 30 && iv <= 150 && // Realistic IV range
+                   priceDecreaseForTargetROI < 30 && 
+                   daysToExpiry >= 7 &&
+                   premium >= 0.01 && premium <= 100; // Reasonable premium range
+        }
+
+        function getRecommendedHoldingPeriod(option) {
+            if (!option || !option.expiration_timestamp) return 'N/A';
+            
+            const daysToExpiry = Math.ceil((option.expiration_timestamp - Date.now()) / (1000 * 60 * 60 * 24));
+            
+            // Recommend holding period based on expiry
+            if (daysToExpiry <= 7) return '1-3 days';
+            if (daysToExpiry <= 14) return '3-7 days';
+            if (daysToExpiry <= 30) return '7-14 days';
+            return '14-21 days';
+        }
+
+        function updateOptionsTable(optionsData) {
+            const tbody = document.getElementById('optionsData');
+            tbody.innerHTML = '';
+            allOptionsData = [];
+
+            if (!optionsData || !optionsData.result || !Array.isArray(optionsData.result)) {
+                console.error('Invalid options data received:', optionsData);
+                return;
+            }
+
+            // Filter out unrealistic data
+            const validOptions = optionsData.result.filter(opt => {
+                const iv = opt.mark_iv * 100; // Convert to percentage
+                return opt.mark_price > 0 && 
+                       opt.mark_price < 100 && // Reasonable premium
+                       iv >= 30 && iv <= 150 && // Realistic IV range
+                       opt.strike > 0;
+            });
+
+            // Add current price header
+            const currentPrice = validOptions[0]?.underlying_price;
+            if (currentPrice) {
+                const priceHeader = document.createElement('div');
+                priceHeader.innerHTML = `<h3>Current ETH Price: $${currentPrice.toLocaleString()}</h3>`;
+                tbody.parentElement.parentElement.insertBefore(priceHeader, tbody.parentElement);
+            }
+
+            // Update table headers
+            const thead = tbody.parentElement.querySelector('thead tr');
+            thead.innerHTML = `
+                <th>Strike Price</th>
+                <th>Expiry Date</th>
+                <th>Implied Volatility</th>
+                <th>Option Premium</th>
+                <th>Price Drop for Profit</th>
+                <th>Price Drop for 3000% ROI</th>
+                <th>Recommended Hold</th>
+                <th>Good Trade</th>
+            `;
+
+            // Process valid options
+            validOptions.forEach((option, index) => {
+                const roiData = calculateROI(option);
+                if (roiData === 'N/A') return;
+                
+                const daysToExpiry = Math.ceil((option.expiration_timestamp - Date.now()) / (1000 * 60 * 60 * 24));
+                const isGood = isGoodTrade(option);
+                const holdingPeriod = getRecommendedHoldingPeriod(option);
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>$${option.strike ? option.strike.toLocaleString() : 'N/A'}</td>
+                    <td>${option.expiration_timestamp ? new Date(option.expiration_timestamp).toLocaleDateString() + ` (${daysToExpiry} days)` : 'N/A'}</td>
+                    <td>${(option.mark_iv * 100).toFixed(2)}%</td>
+                    <td>$${option.mark_price.toFixed(4)}</td>
+                    <td>${roiData.priceDecreaseForProfit}</td>
+                    <td>${roiData.priceDecreaseForTargetROI}</td>
+                    <td>${holdingPeriod}</td>
+                    <td>${isGood ? '✓' : '✗'}</td>
+                `;
+                
+                if (isGood) {
+                    row.style.backgroundColor = 'rgba(0, 255, 0, 0.1)';
+                }
+                
+                allOptionsData.push(row);
+            });
+
+            // Show only first 10 rows initially
+            allOptionsData.forEach((row, index) => {
+                if (index < 10) {
+                    tbody.appendChild(row);
+                } else {
+                    row.classList.add('hidden-rows');
+                    tbody.appendChild(row);
+                }
+            });
+
+            // Update expand button text
+            const expandButton = document.getElementById('expandButton');
+            expandButton.textContent = allOptionsData.length > 10 ? 'Show More Options' : 'All Options Shown';
+            expandButton.style.display = allOptionsData.length > 10 ? 'block' : 'none';
+        }
+
+        function calculateROI(option) {
+            if (!option || !option.mark_price || option.mark_price === 0) {
+                console.log('Invalid option data for ROI calculation:', option);
+                return 'N/A';
+            }
+            try {
+                // For put options:
+                // Premium is in USD per ETH
+                // Strike price is in USD
+                // Contract size is 1 ETH
+                const premium = option.mark_price;  // USD per ETH
+                const strike = option.strike;       // USD
+                const currentPrice = option.underlying_price;
+                const contractSize = 1;             // 1 ETH
+                
+                // Calculate required price movements
+                const priceForProfit = strike - premium;  // Price at which option breaks even
+                const priceForTargetROI = strike - (premium * 31);  // Price needed for 3000% ROI
+                
+                const priceDecreaseForProfit = ((currentPrice - priceForProfit) / currentPrice) * 100;
+                const priceDecreaseForTargetROI = ((currentPrice - priceForTargetROI) / currentPrice) * 100;
+                
+                // Maximum profit = (Strike - Premium) * Contract Size
+                // Maximum loss = Premium * Contract Size
+                const maxProfit = (strike - premium) * contractSize;
+                const maxLoss = premium * contractSize;
+                
+                // ROI = (Maximum Profit / Maximum Loss) * 100
+                const roi = (maxProfit / maxLoss) * 100;
+                
+                return {
+                    roi: roi.toFixed(2) + '%',
+                    priceDecreaseForProfit: priceDecreaseForProfit.toFixed(2) + '%',
+                    priceDecreaseForTargetROI: priceDecreaseForTargetROI.toFixed(2) + '%'
+                };
+            } catch (error) {
+                console.error('Error calculating ROI:', error, 'for option:', option);
+                return 'N/A';
+            }
+        }
+
+        function analyzeData(priceData, optionsData) {
+            const recommendation = document.getElementById('recommendation');
+            
+            if (!optionsData.result || optionsData.result.length === 0) {
+                recommendation.textContent = 'No options data available for analysis.';
+                return;
+            }
+
+            const currentPrice = optionsData.result[0].underlying_price;
+            
+            // Find all options with valid data
+            const allOptions = optionsData.result
+                .filter(opt => {
+                    return opt.mark_iv > 0 && // Must have valid IV
+                           opt.mark_price > 0; // Must have valid price
+                })
+                .map(opt => ({
+                    ...opt,
+                    roi: parseFloat(calculateROI(opt).replace('%', '')) || 0,
+                    daysToExpiry: Math.ceil((opt.expiration_timestamp - Date.now()) / (1000 * 60 * 60 * 24))
+                }))
+                .sort((a, b) => b.roi - a.roi);
+            
+            // Find options that meet the 3000% ROI target and 4-week timeframe
+            const targetOptions = allOptions.filter(opt => 
+                opt.roi >= 3000 && 
+                opt.daysToExpiry <= 28 && 
+                opt.strike < currentPrice
+            );
+
+            // Find options that meet the 4-week timeframe but not the ROI target
+            const timeframeOptions = allOptions.filter(opt => 
+                opt.daysToExpiry <= 28 && 
+                opt.strike < currentPrice
+            );
+
+            // Find options that meet the ROI target but not the timeframe
+            const roiOptions = allOptions.filter(opt => 
+                opt.roi >= 3000 && 
+                opt.strike < currentPrice
+            );
+
+            // Find the best available option overall
+            const bestAvailable = allOptions[0];
+
+            let recommendationHTML = '';
+
+            if (targetOptions.length > 0) {
+                const bestOption = targetOptions[0];
+                
+                recommendationHTML = `
+                    <h3>Perfect Match Found!</h3>
+                    <p>Based on your 3,000% ROI target and 4-week timeframe, here's the best put option:</p>
+                    <ul>
+                        <li>Strike Price: $${bestOption.strike.toLocaleString()}</li>
+                        <li>Expiry: ${new Date(bestOption.expiration_timestamp).toLocaleDateString()} (${bestOption.daysToExpiry} days)</li>
+                        <li>Current IV: ${(bestOption.mark_iv * 100).toFixed(2)}%</li>
+                        <li>Premium: $${bestOption.mark_price.toFixed(4)}</li>
+                        <li>Potential ROI: ${bestOption.roi.toFixed(2)}%</li>
+                        <li>Current ETH Price: $${currentPrice.toLocaleString()}</li>
+                    </ul>
+                `;
+            } else {
+                recommendationHTML = `
+                    <h3>No options currently meet both your 3,000% ROI target and 4-week timeframe.</h3>
+                `;
+
+                // Show best option that meets timeframe but not ROI
+                if (timeframeOptions.length > 0) {
+                    const bestTimeframeOption = timeframeOptions[0];
+                    recommendationHTML += `
+                        <h3>Best Option Within Your Timeframe</h3>
+                        <p>This option meets your 4-week timeframe but has a lower ROI than your target:</p>
+                        <ul>
+                            <li>Strike Price: $${bestTimeframeOption.strike.toLocaleString()}</li>
+                            <li>Expiry: ${new Date(bestTimeframeOption.expiration_timestamp).toLocaleDateString()} (${bestTimeframeOption.daysToExpiry} days)</li>
+                            <li>Current IV: ${(bestTimeframeOption.mark_iv * 100).toFixed(2)}%</li>
+                            <li>Premium: $${bestTimeframeOption.mark_price.toFixed(4)}</li>
+                            <li>Potential ROI: ${bestTimeframeOption.roi.toFixed(2)}%</li>
+                            <li>Current ETH Price: $${currentPrice.toLocaleString()}</li>
+                        </ul>
+                        <p><strong>Why this option?</strong> This is the highest ROI option available within your 4-week timeframe. 
+                        It has a strike price below the current ETH price, making it a put option that would profit if ETH price falls.</p>
+                    `;
+                }
+
+                // Show best option that meets ROI but not timeframe
+                if (roiOptions.length > 0) {
+                    const bestROIOption = roiOptions[0];
+                    recommendationHTML += `
+                        <h3>Best Option With Your Target ROI</h3>
+                        <p>This option meets your 3,000% ROI target but has a longer timeframe:</p>
+                        <ul>
+                            <li>Strike Price: $${bestROIOption.strike.toLocaleString()}</li>
+                            <li>Expiry: ${new Date(bestROIOption.expiration_timestamp).toLocaleDateString()} (${bestROIOption.daysToExpiry} days)</li>
+                            <li>Current IV: ${(bestROIOption.mark_iv * 100).toFixed(2)}%</li>
+                            <li>Premium: $${bestROIOption.mark_price.toFixed(4)}</li>
+                            <li>Potential ROI: ${bestROIOption.roi.toFixed(2)}%</li>
+                            <li>Current ETH Price: $${currentPrice.toLocaleString()}</li>
+                        </ul>
+                        <p><strong>Why this option?</strong> This option offers your target ROI but requires a longer holding period. 
+                        Consider if you're willing to extend your timeframe to achieve your ROI goals.</p>
+                    `;
+                }
+            }
+
+            // Add Best Alternative section with LLM-generated description
+            if (timeframeOptions.length > 0) {
+                const bestTimeframeOption = timeframeOptions[0];
+                const secondBestTimeframeOption = timeframeOptions[1] || null;
+                const thirdBestTimeframeOption = timeframeOptions[2] || null;
+                
+                let alternativeDescription = `Based on current market conditions, the highest ROI put options within your 4-week timeframe are those with strike prices between $${bestTimeframeOption.strike.toLocaleString()} and $${secondBestTimeframeOption ? secondBestTimeframeOption.strike.toLocaleString() : bestTimeframeOption.strike.toLocaleString()}. These options offer the best balance of risk and reward, with premiums that are low enough to maximize potential returns while still providing adequate downside protection.`;
+                
+                if (thirdBestTimeframeOption) {
+                    alternativeDescription += ` Options with strike prices around $${thirdBestTimeframeOption.strike.toLocaleString()} also show promising ROI potential within your timeframe.`;
+                }
+                
+                alternativeDescription += ` The current market volatility suggests that these options may provide significant returns if ETH price experiences a moderate decline.`;
+                
+                recommendationHTML += `
+                    <h3>Best Alternative</h3>
+                    <p>${alternativeDescription}</p>
+                `;
+            } else {
+                recommendationHTML += `
+                    <h3>Best Alternative</h3>
+                    <p>No suitable alternatives could be found within your 4-week timeframe. Consider extending your timeframe or adjusting your criteria to find viable options.</p>
+                `;
+            }
+
+            // Always show the best available option overall
+            if (bestAvailable) {
+                recommendationHTML += `
+                    <h3>Best Available Option Overall</h3>
+                    <p>This is the highest ROI option available in the market:</p>
+                    <ul>
+                        <li>Strike Price: $${bestAvailable.strike.toLocaleString()}</li>
+                        <li>Expiry: ${new Date(bestAvailable.expiration_timestamp).toLocaleDateString()} (${bestAvailable.daysToExpiry} days)</li>
+                        <li>Current IV: ${(bestAvailable.mark_iv * 100).toFixed(2)}%</li>
+                        <li>Premium: $${bestAvailable.mark_price.toFixed(4)}</li>
+                        <li>Potential ROI: ${bestAvailable.roi.toFixed(2)}%</li>
+                        <li>Current ETH Price: $${currentPrice.toLocaleString()}</li>
+                    </ul>
+                    <p><strong>Why this option?</strong> This is the highest ROI option available in the market. 
+                    It may not meet your timeframe or strike price criteria, but it offers the best potential return.</p>
+                `;
+            }
+
+            // Always show the consideration section
+            recommendationHTML += `
+                <p><strong>Consider:</strong></p>
+                <ul>
+                    <li>Extending your timeframe beyond 4 weeks</li>
+                    <li>Adjusting your strike price criteria</li>
+                    <li>Lowering your ROI expectations</li>
+                    <li>Checking back later as market conditions change</li>
+                </ul>
+            `;
+
+            recommendation.innerHTML = recommendationHTML;
+        }
+
+        // Add event listener for expand button
+        document.getElementById('expandButton').addEventListener('click', function() {
+            const hiddenRows = document.querySelectorAll('.hidden-rows');
+            const button = document.getElementById('expandButton');
+            
+            if (isExpanded) {
+                // Collapse
+                hiddenRows.forEach(row => row.classList.add('hidden-rows'));
+                button.textContent = 'Show More Options';
+                isExpanded = false;
+            } else {
+                // Expand
+                hiddenRows.forEach(row => row.classList.remove('hidden-rows'));
+                button.textContent = 'Show Less Options';
+                isExpanded = true;
+            }
+        });
+
+        fetchData();
+        // Refresh data every 5 minutes
+        setInterval(fetchData, 300000);
+    </script>
+</body>
+</html> 
