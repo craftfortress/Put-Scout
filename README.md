@@ -1,5 +1,7 @@
 # ETH Options Analyzer
 
+![ETH Options Analyzer Screenshot](assets/app-screenshot.png)
+
 A tool for analyzing Ethereum put options to find opportunities for 3000% ROI within 4 weeks.
 
 ## Features
