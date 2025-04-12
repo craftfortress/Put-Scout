@@ -77,4 +77,42 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 - [ ] **Backtesting Module**: Incorporate a backtesting feature to simulate how the strategy would have performed historically under similar market conditions.
 - [ ] **User Interface**: Design an intuitive dashboard that displays all relevant metrics, charts, and alerts to facilitate informed decision-making.
 
-By integrating these indicators and tools, your ETH Put Analyzer can effectively identify and evaluate potential opportunities for high-ROI put option strategies under specific market conditions. 
+By integrating these indicators and tools, your ETH Put Analyzer can effectively identify and evaluate potential opportunities for high-ROI put option strategies under specific market conditions.
+
+## Issues
+
+### Recent Challenges
+
+1. **API Rate Limiting**
+   - Deribit API has strict rate limits causing 429 (Too Many Requests) errors
+   - Implemented rate limiting with exponential backoff, but still encountering issues
+   - Current solution: 20 requests per second with 50ms delay between requests
+
+2. **Data Validation**
+   - Many options are being filtered out due to strict validation criteria
+   - Issues with options having zero or invalid premiums
+   - Liquidity problems with high bid-ask spreads
+
+3. **Profit Calculation**
+   - Need to improve profit metrics for put options
+   - Current calculations may not accurately reflect potential ROI
+   - Working on adding price points for 3000% ROI calculation
+
+4. **Option Filtering**
+   - Difficulty finding options that meet all criteria:
+     - 2-4 weeks expiration
+     - Strike prices 35-45% below current ETH price
+     - Premiums under $10
+     - Sufficient liquidity
+
+5. **Server Stability**
+   - Occasional 500 Internal Server Error when fetching options data
+   - Need to improve error handling and recovery mechanisms
+
+### Potential Improvements
+
+- Implement more sophisticated rate limiting strategy
+- Adjust validation criteria to be more lenient while maintaining quality
+- Add more detailed profit calculations with multiple price scenarios
+- Improve error handling and logging for better debugging
+- Consider caching responses to reduce API calls 
