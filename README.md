@@ -1,5 +1,9 @@
 # ETH Options Analyzer
 
+Why? Out assumption: Cos we know that ETH is basically going the way of the dodo ( Thats our assumption ) 
+thus we need to be notified of the best options we can perform with massive 30 x Leverage to make 3000% profit with just a trade or so within 3 weeks or so ( expecting the usual 20% collapse a month ). 
+
+
 ![ETH Options Analyzer](assets/eth.png)
 
 A tool for analyzing Ethereum put options to find opportunities for 3000% ROI within 4 weeks.
