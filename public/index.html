@@ -28,7 +28,7 @@
             --chart-color: #adb5bd;
         }
 
-        body { 
+        body {
             font-family: Arial, sans-serif; 
             margin: 20px; 
             background-color: var(--bg-color);
@@ -53,11 +53,13 @@
         .options-table-container { margin-top: 30px; }
         .button {
             background-color: var(--button-bg); 
-            color: white; 
+            color: white;
             border: none; 
             border-radius: 4px; 
             cursor: pointer; 
             transition: background-color 0.3s;
+            padding: 8px 16px;
+            margin-left: 8px;
         }
         .button:hover { background-color: var(--button-hover); }
         .expand-button {
@@ -66,16 +68,67 @@
             padding: 8px 16px;
         }
         .hidden-rows { display: none; }
-        .theme-toggle {
+        .top-button-container {
             position: fixed;
+            display: flex;
+            justify-content: end;
             top: 20px;
             right: 20px;
-            padding: 8px 16px;
+        }
+        .form-popup {
+            display: none;
+            position: fixed;
+            top: 60px;
+            right: 15px;
+            border: 3px solid var(--border-color);
+            z-index: 9;
+        }
+        .form-container {
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            max-width: 400px;
+            padding: 10px;
+            background-color: var(--bg-color);
+        }
+        .form-container label, .form-container input, .form-container h2 {
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .form-container input {
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            max-width: 6em;
+            border: none;
+            background-color: var(--header-bg);
+            padding: 8px;
+        }
+        .form-button-container {
+            display: flex;
+            justify-content: end;
         }
     </style>
 </head>
 <body>
-    <button id="themeToggle" class="button theme-toggle">Toggle Dark Mode</button>
+    <div class="top-button-container">
+        <button id="settings" class="button" onclick="openSettings()">Settings</button>
+        <button id="themeToggle" class="button">Toggle Dark Mode</button>
+    </div>
+    <div class="form-popup" id="myForm">
+        <form class="form-container">
+            <h2>Settings</h2>
+            <label for="roi"><b>ROI</b></label>
+            <input type="text" placeholder="ROI" name="roi" required>
+            <label for="roi"><b>%</b></label><br>
+            <label for="timeframe"><b>Timeframe</b></label>
+            <input type="text" placeholder="Timeframe" name="timeframe" required>
+            <label for="timeframe"><b>days</b></label><br>
+            <div class="form-button-container">
+                <button type="button" class="button">Update</button>
+                <button type="button" class="button cancel" onclick="closeSettings()">Close</button>
+            </div>
+        </form>
+    </div>
+      
     <div class="container">
         <h1>Ethereum Price and Options Analysis</h1>
 
@@ -120,6 +173,14 @@
         let allOptionsData = [];
         let isExpanded = false;
         let isDarkMode = false;
+
+        function openSettings() {
+            document.getElementById("myForm").style.display = "block";
+        }
+
+        function closeSettings() {
+            document.getElementById("myForm").style.display = "none";
+        }
 
         // Theme toggle functionality
         document.getElementById('themeToggle').addEventListener('click', function() {
