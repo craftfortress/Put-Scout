@@ -117,13 +117,13 @@
         <form class="form-container">
             <h2>Settings</h2>
             <label for="roi"><b>ROI</b></label>
-            <input type="text" placeholder="ROI" name="roi" required>
+            <input id="roi" type="text" placeholder="ROI" name="roi" required>
             <label for="roi"><b>%</b></label><br>
             <label for="timeframe"><b>Timeframe</b></label>
-            <input type="text" placeholder="Timeframe" name="timeframe" required>
+            <input id="timeframe" type="text" placeholder="Timeframe" name="timeframe" required>
             <label for="timeframe"><b>days</b></label><br>
             <div class="form-button-container">
-                <button type="button" class="button">Update</button>
+                <button type="button" class="button" onclick="updateSettings()">Update</button>
                 <button type="button" class="button cancel" onclick="closeSettings()">Close</button>
             </div>
         </form>
@@ -173,13 +173,23 @@
         let allOptionsData = [];
         let isExpanded = false;
         let isDarkMode = false;
+        let roi = 3000;
+        let timeframe = 28;
 
         function openSettings() {
+            document.getElementById("roi").value = roi;
+            document.getElementById("timeframe").value = timeframe;
             document.getElementById("myForm").style.display = "block";
         }
 
         function closeSettings() {
             document.getElementById("myForm").style.display = "none";
+        }
+
+        function updateSettings() {
+            roi = document.getElementById("roi").value;
+            timeframe = document.getElementById("timeframe").value;
+            closeSettings();
         }
 
         // Theme toggle functionality
