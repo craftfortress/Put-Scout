@@ -173,11 +173,11 @@
         let allOptionsData = [];
         let isExpanded = false;
         let isDarkMode = false;
-        let roi = 3000;
+        let targetRoi = 3000;
         let timeframe = 28;
 
         function openSettings() {
-            document.getElementById("roi").value = roi;
+            document.getElementById("roi").value = targetRoi;
             document.getElementById("timeframe").value = timeframe;
             document.getElementById("myForm").style.display = "block";
         }
@@ -187,9 +187,10 @@
         }
 
         function updateSettings() {
-            roi = document.getElementById("roi").value;
+            targetRoi = document.getElementById("roi").value;
             timeframe = document.getElementById("timeframe").value;
             closeSettings();
+            fetchData();
         }
 
         // Theme toggle functionality
@@ -335,10 +336,10 @@
             const daysToExpiry = Math.ceil((option.expiration_timestamp - Date.now()) / (1000 * 60 * 60 * 24));
             const iv = option.mark_iv * 100; // Convert to percentage
             
-            // Calculate required price movement for 3000% ROI
+            // Calculate required price movement for ROI
             const priceForTargetROI = option.option_type === 'p' ? 
-                strike - (premium * 31) : // For puts
-                strike + (premium * 31);  // For calls
+                strike - (premium * targetRoi / 100 + 1) : // For puts
+                strike + (premium * targetRoi / 100 + 1);  // For calls
             
             const priceMovementForTargetROI = option.option_type === 'p' ?
                 ((currentPrice - priceForTargetROI) / currentPrice) * 100 : // For puts
@@ -428,8 +429,8 @@
                     strike + premium;   // For calls: Price at which option breaks even
                 
                 const priceForTargetROI = option.option_type === 'p' ?
-                    strike - (premium * 31) :  // For puts: Price needed for 3000% ROI
-                    strike + (premium * 31);   // For calls: Price needed for 3000% ROI
+                    strike - (premium * targetRoi / 100 + 1) :  // For puts: Price needed for ROI
+                    strike + (premium * targetRoi / 100 + 1);   // For calls: Price needed for ROI
                 
                 const priceMovementForProfit = option.option_type === 'p' ?
                     ((currentPrice - priceForProfit) / currentPrice) * 100 :  // For puts
@@ -488,22 +489,22 @@
                 })
                 .sort((a, b) => b.roi - a.roi);
             
-            // Find options that meet the 3000% ROI target and 4-week timeframe
+            // Find options that meet the ROI target and timeframe
             const targetOptions = allOptions.filter(opt => 
-                opt.roi >= 3000 && 
+                opt.roi >= targetRoi && 
                 opt.daysToExpiry <= 28 && 
                 opt.strike < currentPrice
             );
 
-            // Find options that meet the 4-week timeframe but not the ROI target
+            // Find options that meet the timeframe but not the ROI target
             const timeframeOptions = allOptions.filter(opt => 
-                opt.daysToExpiry <= 28 && 
+                opt.daysToExpiry <= timeframe && 
                 opt.strike < currentPrice
             );
 
             // Find options that meet the ROI target but not the timeframe
             const roiOptions = allOptions.filter(opt => 
-                opt.roi >= 3000 && 
+                opt.roi >= targetRoi && 
                 opt.strike < currentPrice
             );
 
